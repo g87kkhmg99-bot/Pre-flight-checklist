@@ -9,7 +9,7 @@
 .crop-editor.open{display:flex}.crop-top{display:flex;flex-direction:column;gap:4px;padding:8px}.crop-top span{font-size:13px;color:#d1d8e3}
 .crop-stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#05080d;touch-action:none}
 .crop-stage img{display:block;max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;user-select:none}
-.crop-selection{position:absolute;border:2px solid #28a7ff;background:rgba(40,167,255,.12);box-shadow:0 0 0 9999px rgba(0,0,0,.48);display:none;touch-action:none}
+.crop-selection{position:absolute;border:2px solid #28a7ff;background:rgba(40,167,255,.12);box-shadow:0 0 0 9999px rgba(0,0,0,.48);display:none;touch-action:none;pointer-events:none}
 .crop-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:8px}.crop-actions button{font-size:14px}
 </style></head><body>
 <h2>Preflight / Taxi Checklist</h2>
@@ -41,32 +41,50 @@ function show(id,data){let host=$(id+'-preview');host.replaceChildren();if(data)
 
 let cropTarget='',cropOriginal='',cropRect=null,cropStart=null,cropBounds=null;
 const cropStage=$('crop-stage'),cropImg=$('crop-source'),cropSel=$('crop-selection');
+function measureCropImage(){
+  const sr=cropStage.getBoundingClientRect(),ir=cropImg.getBoundingClientRect();
+  if(!ir.width||!ir.height||!cropImg.naturalWidth)return false;
+  cropBounds={left:ir.left-sr.left,top:ir.top-sr.top,width:ir.width,height:ir.height};
+  return true;
+}
 function openCrop(id,data){
-  cropTarget=id;cropOriginal=data;cropRect=null;cropSel.style.display='none';
-  cropImg.onload=()=>{requestAnimationFrame(()=>{const sr=cropStage.getBoundingClientRect(),ir=cropImg.getBoundingClientRect();cropBounds={left:ir.left-sr.left,top:ir.top-sr.top,width:ir.width,height:ir.height};$('crop-editor').classList.add('open')})};
+  cropTarget=id;cropOriginal=data;cropRect=null;cropStart=null;cropBounds=null;cropSel.style.display='none';
+  $('crop-editor').classList.add('open');
+  cropImg.onload=()=>{
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(!measureCropImage())$('status').textContent='Could not size the screenshot. Close and try again.';
+    }));
+  };
+  cropImg.onerror=()=>{$('status').textContent='Could not open this screenshot for cropping.';$('crop-editor').classList.remove('open')};
   cropImg.src=data;
 }
-function cropPoint(e){const r=cropStage.getBoundingClientRect();return{x:Math.max(cropBounds.left,Math.min(cropBounds.left+cropBounds.width,e.clientX-r.left)),y:Math.max(cropBounds.top,Math.min(cropBounds.top+cropBounds.height,e.clientY-r.top))}}
+function cropPoint(e){
+  const r=cropStage.getBoundingClientRect();
+  return{x:Math.max(cropBounds.left,Math.min(cropBounds.left+cropBounds.width,e.clientX-r.left)),y:Math.max(cropBounds.top,Math.min(cropBounds.top+cropBounds.height,e.clientY-r.top))};
+}
 function drawCrop(){if(!cropRect)return;cropSel.style.display='block';cropSel.style.left=cropRect.x+'px';cropSel.style.top=cropRect.y+'px';cropSel.style.width=cropRect.w+'px';cropSel.style.height=cropRect.h+'px'}
-cropStage.onpointerdown=e=>{
- if(!cropBounds)return;cropStage.setPointerCapture(e.pointerId);cropStart=cropPoint(e);cropRect={x:cropStart.x,y:cropStart.y,w:1,h:1};drawCrop();
-};
-cropStage.onpointermove=e=>{
- if(!cropStart||!cropBounds)return;const q=cropPoint(e);
- cropRect={x:Math.min(cropStart.x,q.x),y:Math.min(cropStart.y,q.y),w:Math.abs(q.x-cropStart.x),h:Math.abs(q.y-cropStart.y)};drawCrop();
-};
-['pointerup','pointercancel'].forEach(ev=>cropStage.addEventListener(ev,()=>cropStart=null));
-$('crop-cancel').onclick=()=>{$('crop-editor').classList.remove('open');cropBounds=null};
-$('crop-reset').onclick=()=>{cropRect=null;cropSel.style.display='none'};
+cropStage.addEventListener('pointerdown',e=>{
+  if(!cropBounds)return;e.preventDefault();
+  try{cropStage.setPointerCapture(e.pointerId)}catch(_){ }
+  cropStart=cropPoint(e);cropRect={x:cropStart.x,y:cropStart.y,w:1,h:1};drawCrop();
+});
+cropStage.addEventListener('pointermove',e=>{
+  if(!cropStart||!cropBounds)return;e.preventDefault();const q=cropPoint(e);
+  cropRect={x:Math.min(cropStart.x,q.x),y:Math.min(cropStart.y,q.y),w:Math.abs(q.x-cropStart.x),h:Math.abs(q.y-cropStart.y)};drawCrop();
+});
+['pointerup','pointercancel','lostpointercapture'].forEach(ev=>cropStage.addEventListener(ev,()=>cropStart=null));
+$('crop-cancel').onclick=()=>{$('crop-editor').classList.remove('open');cropBounds=null;cropStart=null};
+$('crop-reset').onclick=()=>{cropRect=null;cropStart=null;cropSel.style.display='none'};
 $('crop-apply').onclick=()=>{
- if(!cropRect||cropRect.w<20||cropRect.h<20){$('status').textContent='Drag over the screenshot to select the area to keep.';return}
- const scaleX=cropImg.naturalWidth/cropBounds.width,scaleY=cropImg.naturalHeight/cropBounds.height;
- const sx=Math.round((cropRect.x-cropBounds.left)*scaleX),sy=Math.round((cropRect.y-cropBounds.top)*scaleY);
- const sw=Math.round(cropRect.w*scaleX),sh=Math.round(cropRect.h*scaleY);
- const out=document.createElement('canvas');out.width=sw;out.height=sh;
- out.getContext('2d').drawImage(cropImg,sx,sy,sw,sh,0,0,sw,sh);
- const cropped=out.toDataURL('image/jpeg',0.92);
- if(persistScreenshot(cropTarget,cropped)){show(cropTarget,cropped);$('status').textContent='Cropped screenshot saved.';$('crop-editor').classList.remove('open');cropBounds=null}
+  if(!cropBounds||!cropRect||cropRect.w<20||cropRect.h<20){$('status').textContent='Drag over the screenshot to select the area to keep.';return}
+  const scaleX=cropImg.naturalWidth/cropBounds.width,scaleY=cropImg.naturalHeight/cropBounds.height;
+  const sx=Math.max(0,Math.round((cropRect.x-cropBounds.left)*scaleX)),sy=Math.max(0,Math.round((cropRect.y-cropBounds.top)*scaleY));
+  const sw=Math.min(cropImg.naturalWidth-sx,Math.round(cropRect.w*scaleX)),sh=Math.min(cropImg.naturalHeight-sy,Math.round(cropRect.h*scaleY));
+  if(sw<1||sh<1){$('status').textContent='Please select a larger area of the screenshot.';return}
+  const out=document.createElement('canvas');out.width=sw;out.height=sh;
+  out.getContext('2d').drawImage(cropImg,sx,sy,sw,sh,0,0,sw,sh);
+  const cropped=out.toDataURL('image/jpeg',0.92);
+  if(persistScreenshot(cropTarget,cropped)){show(cropTarget,cropped);$('status').textContent='Cropped screenshot saved.';$('crop-editor').classList.remove('open');cropBounds=null;cropStart=null}
 };
 $('zoom-in').onclick=()=>setViewerScale(viewerScale*1.35);$('zoom-out').onclick=()=>setViewerScale(viewerScale/1.35);$('zoom-fit').onclick=()=>setViewerScale(Math.min((window.innerWidth-24)/viewerNaturalW,(window.innerHeight-150)/viewerNaturalH,1));$('viewer-close').onclick=closeViewer;$('image-viewer').onclick=e=>{if(e.target===$('image-viewer'))closeViewer};document.addEventListener('keydown',e=>{if(e.key==='Escape')closeViewer()});
 const c=$('notes'),ctx=c.getContext('2d');let strokes=[],active=null,erase=false;
@@ -136,7 +154,7 @@ try{let s=JSON.parse(localStorage.getItem(key)||'null');if(s){$('order').value=s
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=5', {updateViaCache:'none'}).catch(err => console.error('Offline setup:', err));
+    navigator.serviceWorker.register('./sw.js?v=6', {updateViaCache:'none'}).catch(err => console.error('Offline setup:', err));
   });
 }
 </script></body></html>
