@@ -7,9 +7,11 @@
 
  .crop-editor{display:none;position:fixed;inset:0;z-index:10000;background:#101827;color:white;padding:env(safe-area-inset-top) 12px env(safe-area-inset-bottom);flex-direction:column;gap:8px;overflow:auto}
 .crop-editor.open{display:flex}.crop-top{display:flex;flex-direction:column;gap:4px;padding:6px}.crop-top span{font-size:13px;color:#d1d8e3}
-.crop-stage{display:flex;align-items:center;justify-content:center;background:#05080d;border-radius:8px;padding:6px;min-height:100px}
-.crop-stage img{display:block;max-width:100%;max-height:25vh;object-fit:contain;user-select:none}
-.crop-controls{display:grid;grid-template-columns:1fr 1fr;gap:7px 12px}.crop-control{font-size:12px;color:#e6edf7}.crop-control label{display:flex;justify-content:space-between;margin-bottom:3px}.crop-control input{width:100%;min-height:30px;accent-color:#35a9ff;touch-action:pan-y}
+.crop-stage{display:flex;align-items:center;justify-content:center;background:#05080d;border-radius:8px;padding:6px;min-height:100px;overflow:hidden}
+.crop-frame{position:relative;display:inline-block;max-width:100%;line-height:0}
+.crop-stage img{display:block;max-width:100%;max-height:34vh;width:auto;height:auto;object-fit:contain;user-select:none;-webkit-user-drag:none;pointer-events:none}
+#crop-overlay{position:absolute;inset:0;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair}
+#crop-selection{position:absolute;left:0;top:0;width:100%;height:100%;border:2px solid #35a9ff;background:rgba(53,169,255,.12);box-shadow:0 0 0 9999px rgba(0,0,0,.48);pointer-events:none;box-sizing:border-box}
 #crop-preview{display:block;width:100%;max-height:28vh;object-fit:contain;background:#05080d;border:1px solid #526174;border-radius:8px}
 .crop-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:6px}.crop-actions button{font-size:14px}
 </style></head><body>
@@ -21,14 +23,8 @@
 <div id="flysmart-upload" class="upload"><b>FlySmart take-off screenshot</b><input id="flysmart" type="file" accept="image/*"><div id="flysmart-preview" class="preview"></div></div>
 
 <div id="crop-editor" class="crop-editor" role="dialog" aria-modal="true" aria-label="Crop screenshot">
-  <div class="crop-top"><b>Crop screenshot</b><span>Adjust the four sliders. The preview below shows the area that will be kept.</span></div>
-  <div class="crop-stage"><img id="crop-source" alt="Original screenshot"></div>
-  <div class="crop-controls">
-    <div class="crop-control"><label for="crop-x">Left <span id="crop-x-value">0%</span></label><input id="crop-x" type="range" min="0" max="90" value="0"></div>
-    <div class="crop-control"><label for="crop-y">Top <span id="crop-y-value">0%</span></label><input id="crop-y" type="range" min="0" max="90" value="0"></div>
-    <div class="crop-control"><label for="crop-w">Width <span id="crop-w-value">100%</span></label><input id="crop-w" type="range" min="10" max="100" value="100"></div>
-    <div class="crop-control"><label for="crop-h">Height <span id="crop-h-value">100%</span></label><input id="crop-h" type="range" min="10" max="100" value="100"></div>
-  </div>
+  <div class="crop-top"><b>Crop screenshot</b><span>Drag your finger or Apple Pencil over the image to select the area to keep.</span></div>
+  <div class="crop-stage"><div class="crop-frame"><img id="crop-source" alt="Original screenshot"><div id="crop-overlay"><div id="crop-selection"></div></div></div></div>
   <div class="muted" style="color:#d1d8e3">Cropped result preview</div><canvas id="crop-preview"></canvas>
   <div class="crop-actions"><button id="crop-cancel" type="button">Cancel</button><button id="crop-reset" type="button">Reset</button><button id="crop-apply" class="primary" type="button">Use crop</button></div>
 </div>
@@ -48,44 +44,64 @@ function setViewerScale(scale){viewerScale=Math.max(.25,Math.min(4,scale));let i
 function openViewer(src,label){let im=$('viewer-image');$('viewer-label').textContent=label+' — use + / − to zoom';im.onload=()=>{viewerNaturalW=im.naturalWidth;viewerNaturalH=im.naturalHeight;let maxW=window.innerWidth-24,maxH=window.innerHeight-150;setViewerScale(Math.min(maxW/viewerNaturalW,maxH/viewerNaturalH,1));$('image-viewer').classList.add('open')};im.src=src}
 function show(id,data){let host=$(id+'-preview');host.replaceChildren();if(data){let im=document.createElement('img');im.src=data;im.alt=id==='flysmart'?'FlySmart screenshot':'Crew roster screenshot';im.onclick=()=>openViewer(data,id==='flysmart'?'FlySmart take-off screenshot':'Crew names / crew roster screenshot');let hint=document.createElement('p');hint.className='preview-hint';hint.textContent='Tap screenshot to view full size and zoom';const cropBtn=document.createElement('button');cropBtn.type='button';cropBtn.textContent='Crop image';cropBtn.onclick=()=>openCrop(id,data);host.append(im,hint,cropBtn)}}
 
-let cropTarget='',cropOriginal='';
+let cropTarget='';
 const cropImg=$('crop-source'),cropPreview=$('crop-preview'),cropCtx=cropPreview.getContext('2d');
-const cropIds=['crop-x','crop-y','crop-w','crop-h'];
-function cropValues(){return cropIds.map(id=>Number($(id).value))}
+const cropOverlay=$('crop-overlay'),cropSelection=$('crop-selection');
+let cropRect={x:0,y:0,w:1,h:1},dragStart=null,dragPointer=null;
+function clamp(v,min,max){return Math.max(min,Math.min(max,v))}
+function paintSelection(){
+  cropSelection.style.left=(cropRect.x*100)+'%';
+  cropSelection.style.top=(cropRect.y*100)+'%';
+  cropSelection.style.width=(cropRect.w*100)+'%';
+  cropSelection.style.height=(cropRect.h*100)+'%';
+}
 function updateCrop(){
   if(!cropImg.naturalWidth||!cropImg.naturalHeight)return;
-  let [x,y,w,h]=cropValues();
-  x=Math.min(x,100-w);y=Math.min(y,100-h);
-  $('crop-x').value=x;$('crop-y').value=y;
-  $('crop-x-value').textContent=x+'%';$('crop-y-value').textContent=y+'%';
-  $('crop-w-value').textContent=w+'%';$('crop-h-value').textContent=h+'%';
-  const sx=Math.round(cropImg.naturalWidth*x/100),sy=Math.round(cropImg.naturalHeight*y/100);
-  const sw=Math.max(1,Math.round(cropImg.naturalWidth*w/100)),sh=Math.max(1,Math.round(cropImg.naturalHeight*h/100));
+  paintSelection();
+  const sx=Math.round(cropImg.naturalWidth*cropRect.x),sy=Math.round(cropImg.naturalHeight*cropRect.y);
+  const sw=Math.max(1,Math.round(cropImg.naturalWidth*cropRect.w)),sh=Math.max(1,Math.round(cropImg.naturalHeight*cropRect.h));
   cropPreview.width=sw;cropPreview.height=sh;
+  cropCtx.clearRect(0,0,sw,sh);
   cropCtx.drawImage(cropImg,sx,sy,sw,sh,0,0,sw,sh);
 }
+function pointOnImage(e){
+  const r=cropOverlay.getBoundingClientRect();
+  return {x:clamp((e.clientX-r.left)/r.width,0,1),y:clamp((e.clientY-r.top)/r.height,0,1)};
+}
+cropOverlay.addEventListener('pointerdown',e=>{
+  if(!cropImg.naturalWidth)return;
+  e.preventDefault();
+  cropOverlay.setPointerCapture(e.pointerId);
+  dragPointer=e.pointerId;dragStart=pointOnImage(e);
+  cropRect={x:dragStart.x,y:dragStart.y,w:0.01,h:0.01};
+  updateCrop();
+});
+cropOverlay.addEventListener('pointermove',e=>{
+  if(dragStart===null||e.pointerId!==dragPointer)return;
+  e.preventDefault();
+  const p=pointOnImage(e),x=Math.min(dragStart.x,p.x),y=Math.min(dragStart.y,p.y);
+  cropRect={x,y,w:Math.max(.01,Math.abs(p.x-dragStart.x)),h:Math.max(.01,Math.abs(p.y-dragStart.y))};
+  cropRect.w=Math.min(cropRect.w,1-x);cropRect.h=Math.min(cropRect.h,1-y);
+  updateCrop();
+});
+function finishCropDrag(e){if(dragPointer===null||e.pointerId!==dragPointer)return;dragStart=null;dragPointer=null}
+cropOverlay.addEventListener('pointerup',finishCropDrag);
+cropOverlay.addEventListener('pointercancel',finishCropDrag);
 function openCrop(id,data){
-  cropTarget=id;
-  $('crop-x').value=0;$('crop-y').value=0;$('crop-w').value=100;$('crop-h').value=100;
+  cropTarget=id;cropRect={x:0,y:0,w:1,h:1};
   $('crop-editor').classList.add('open');
   cropImg.onload=()=>requestAnimationFrame(updateCrop);
   cropImg.onerror=()=>{$('status').textContent='Could not open this screenshot for cropping.';$('crop-editor').classList.remove('open')};
   cropImg.src=data;
   if(cropImg.complete&&cropImg.naturalWidth)requestAnimationFrame(updateCrop);
 }
-cropIds.forEach(id=>$(id).addEventListener('input',()=>{
-  const w=Number($('crop-w').value),h=Number($('crop-h').value);
-  $('crop-x').max=100-w;$('crop-y').max=100-h;
-  updateCrop();
-}));
 $('crop-cancel').onclick=()=>$('crop-editor').classList.remove('open');
-$('crop-reset').onclick=()=>{$('crop-x').value=0;$('crop-y').value=0;$('crop-w').value=100;$('crop-h').value=100;$('crop-x').max=90;$('crop-y').max=90;updateCrop()};
+$('crop-reset').onclick=()=>{cropRect={x:0,y:0,w:1,h:1};updateCrop()};
 $('crop-apply').onclick=()=>{
   if(!cropImg.naturalWidth||!cropImg.naturalHeight)return;
-  const [x,y,w,h]=cropValues();
-  const sx=Math.round(cropImg.naturalWidth*x/100),sy=Math.round(cropImg.naturalHeight*y/100);
-  const sw=Math.max(1,Math.min(cropImg.naturalWidth-sx,Math.round(cropImg.naturalWidth*w/100)));
-  const sh=Math.max(1,Math.min(cropImg.naturalHeight-sy,Math.round(cropImg.naturalHeight*h/100)));
+  const sx=Math.max(0,Math.round(cropImg.naturalWidth*cropRect.x)),sy=Math.max(0,Math.round(cropImg.naturalHeight*cropRect.y));
+  const sw=Math.max(1,Math.min(cropImg.naturalWidth-sx,Math.round(cropImg.naturalWidth*cropRect.w)));
+  const sh=Math.max(1,Math.min(cropImg.naturalHeight-sy,Math.round(cropImg.naturalHeight*cropRect.h)));
   const out=document.createElement('canvas');out.width=sw;out.height=sh;
   out.getContext('2d').drawImage(cropImg,sx,sy,sw,sh,0,0,sw,sh);
   const cropped=out.toDataURL('image/jpeg',0.92);
@@ -159,7 +175,7 @@ try{let s=JSON.parse(localStorage.getItem(key)||'null');if(s){$('order').value=s
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=9', {updateViaCache:'none'}).catch(err => console.error('Offline setup:', err));
+    navigator.serviceWorker.register('./sw.js?v=10', {updateViaCache:'none'}).catch(err => console.error('Offline setup:', err));
   });
 }
 </script></body></html>
