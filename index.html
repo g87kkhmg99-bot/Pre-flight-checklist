@@ -17,7 +17,8 @@
 <section class="panel"><div class="heading">FLIGHT PREPARATION</div><div class="grid">
 <div class="field"><label>ORDER</label><input id="order" type="number" inputmode="numeric"></div><div class="field"><label>POB</label><input id="pob" type="number" inputmode="numeric"></div><div class="field"><label>ATIS</label><input id="atis" type="text" placeholder="Enter ATIS"></div></div></section>
 <section class="panel"><div class="heading">PREFLIGHT / TAXI <span id="count" class="muted" style="float:right">0 / 20 complete</span></div><div class="progress"><div id="bar"></div></div><div class="columns"><div><div class="colhead">PREFLIGHT</div><div id="preflight"></div></div><div><div class="colhead">TAXI</div><div id="taxi"></div></div></div></section>
-<section class="panel"><div class="heading">SCREENSHOT ATTACHMENTS</div><div class="upload"><b>FlySmart take-off screenshot</b><input id="flysmart" type="file" accept="image/*"><div id="flysmart-preview" class="preview"></div></div><div class="upload"><b>Crew names / crew roster screenshot</b><input id="crew" type="file" accept="image/*"><div id="crew-preview" class="preview"></div></div><p class="muted">Press Save checklist to store screenshots on this device.</p></section>
+<section class="panel"><div class="heading">SCREENSHOT ATTACHMENTS</div><div class="upload"><b>Crew names / crew roster screenshot</b><input id="crew" type="file" accept="image/*"><div id="crew-preview" class="preview"></div></div><p class="muted">Press Save checklist to store screenshots on this device.</p></section>
+<div id="flysmart-upload" class="upload"><b>FlySmart take-off screenshot</b><input id="flysmart" type="file" accept="image/*"><div id="flysmart-preview" class="preview"></div></div>
 
 <div id="crop-editor" class="crop-editor" role="dialog" aria-modal="true" aria-label="Crop screenshot">
   <div class="crop-top"><b>Crop screenshot</b><span>Adjust the four sliders. The preview below shows the area that will be kept.</span></div>
@@ -40,7 +41,7 @@
 const pre=[['EDTO','edto'],['PINS','pins'],['APU','apu'],['APU BLD','apu_bld'],['EXT PWR','ext_pwr'],['ALTN BRK','altn_brk'],['CRS','crs'],['FUEL','fuel'],['HF','hf'],['NWS','nws'],['COCKPIT PREP CHECKLIST','cockpit_prep'],['L/S','loadsheet'],['CONFIRM PRE-DEPARTURE CHECKS COMPLETE','departure_complete']];
 const taxi=[['BRAKE CHK','brake_chk'],['CABIN READY','cabin_ready'],['CTL CHK','ctl_chk'],['BRAKE TEMP','brake_temp'],['TO BRIEF','to_brief'],['TAXI CL','taxi_cl'],['LINEUP CL','lineup_cl']],all=[...pre,...taxi],checked={};
 function progress(){let n=all.filter(x=>checked[x[1]]).length;$('count').textContent=n+' / 20 complete';$('bar').style.width=n/20*100+'%'}
-function render(){[['preflight',pre],['taxi',taxi]].forEach(([id,list])=>{let host=$(id);host.replaceChildren();list.forEach(([label,k])=>{let row=document.createElement('label');row.className='checkrow'+(checked[k]?' done':'');let cb=document.createElement('input');cb.type='checkbox';cb.checked=!!checked[k];cb.onchange=()=>{checked[k]=cb.checked;row.classList.toggle('done',cb.checked);progress()};let span=document.createElement('span');span.textContent=label;row.append(cb,span);host.append(row)})});progress()}render();
+function render(){[['preflight',pre],['taxi',taxi]].forEach(([id,list])=>{let host=$(id);host.replaceChildren();list.forEach(([label,k])=>{let row=document.createElement('label');row.className='checkrow'+(checked[k]?' done':'');let cb=document.createElement('input');cb.type='checkbox';cb.checked=!!checked[k];cb.onchange=()=>{checked[k]=cb.checked;row.classList.toggle('done',cb.checked);progress()};let span=document.createElement('span');span.textContent=label;row.append(cb,span);host.append(row);if(k==='lineup_cl'){host.append($('flysmart-upload'))}})});progress()}render();
 let viewerScale=1,viewerNaturalW=0,viewerNaturalH=0;
 function closeViewer(){$('image-viewer').classList.remove('open')}
 function setViewerScale(scale){viewerScale=Math.max(.25,Math.min(4,scale));let im=$('viewer-image');im.style.width=(viewerNaturalW*viewerScale)+'px';im.style.height=(viewerNaturalH*viewerScale)+'px'}
@@ -158,7 +159,7 @@ try{let s=JSON.parse(localStorage.getItem(key)||'null');if(s){$('order').value=s
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=7', {updateViaCache:'none'}).catch(err => console.error('Offline setup:', err));
+    navigator.serviceWorker.register('./sw.js?v=8', {updateViaCache:'none'}).catch(err => console.error('Offline setup:', err));
   });
 }
 </script></body></html>
