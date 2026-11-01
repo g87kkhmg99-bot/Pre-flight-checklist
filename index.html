@@ -42,7 +42,7 @@ let viewerScale=1,viewerNaturalW=0,viewerNaturalH=0;
 function closeViewer(){$('image-viewer').classList.remove('open')}
 function setViewerScale(scale){viewerScale=Math.max(.25,Math.min(4,scale));let im=$('viewer-image');im.style.width=(viewerNaturalW*viewerScale)+'px';im.style.height=(viewerNaturalH*viewerScale)+'px'}
 function openViewer(src,label){let im=$('viewer-image');$('viewer-label').textContent=label+' — use + / − to zoom';im.onload=()=>{viewerNaturalW=im.naturalWidth;viewerNaturalH=im.naturalHeight;let maxW=window.innerWidth-24,maxH=window.innerHeight-150;setViewerScale(Math.min(maxW/viewerNaturalW,maxH/viewerNaturalH,1));$('image-viewer').classList.add('open')};im.src=src}
-function show(id,data){let host=$(id+'-preview');host.replaceChildren();if(data){let im=document.createElement('img');im.src=data;im.alt=id==='flysmart'?'FlySmart screenshot':'Crew roster screenshot';im.onclick=()=>openViewer(data,id==='flysmart'?'FlySmart take-off screenshot':'Crew names / crew roster screenshot');let hint=document.createElement('p');hint.className='preview-hint';hint.textContent='Tap screenshot to view full size and zoom';const cropBtn=document.createElement('button');cropBtn.type='button';cropBtn.textContent='Crop image';cropBtn.onclick=()=>openCrop(id,data);host.append(im,hint,cropBtn)}}
+function show(id,data){let host=$(id+'-preview');host.replaceChildren();if(typeof data==='string'&&data.startsWith('data:image/')){let im=document.createElement('img');im.src=data;im.alt=id==='flysmart'?'FlySmart screenshot':'Crew roster screenshot';im.onclick=()=>openViewer(data,id==='flysmart'?'FlySmart take-off screenshot':'Crew names / crew roster screenshot');let hint=document.createElement('p');hint.className='preview-hint';hint.textContent='Tap screenshot to view full size and zoom';const cropBtn=document.createElement('button');cropBtn.type='button';cropBtn.textContent='Crop image';cropBtn.onclick=()=>openCrop(id,data);host.append(im,hint,cropBtn)}}
 
 let cropTarget='';
 const cropImg=$('crop-source'),cropPreview=$('crop-preview'),cropCtx=cropPreview.getContext('2d');
@@ -169,13 +169,13 @@ $('save').onclick=()=>{
   }catch(e){$('status').textContent='Unable to save all data. Try reducing screenshot sizes.'}
 };
 $('reset').onclick=()=>{if(!confirm('Reset all details, ticks, screenshots and notes for the next flight?'))return;all.forEach(x=>delete checked[x[1]]);render();['order','pob','atis','flysmart','crew'].forEach(id=>$(id).value='');show('flysmart','');show('crew','');screenshotData={flysmart:'',crew:''};strokes=[];redraw();localStorage.removeItem(key);$('status').textContent='Reset for next flight.'};
-try{let s=JSON.parse(localStorage.getItem(key)||'null');if(s){$('order').value=s.order||'';$('pob').value=s.pob||'';$('atis').value=s.atis||'';Object.assign(checked,s.checked||{});render();screenshotData.flysmart=s.flysmart||'';screenshotData.crew=s.crew||'';show('flysmart',screenshotData.flysmart);show('crew',screenshotData.crew);if(s.notes){let im=new Image();im.onload=()=>ctx.drawImage(im,0,0,c.clientWidth,180);im.src=s.notes}$('status').textContent='Saved checklist restored from this device.'}}catch(e){}
+try{let s=JSON.parse(localStorage.getItem(key)||'null');if(s){$('order').value=s.order||'';$('pob').value=s.pob||'';$('atis').value=s.atis||'';Object.assign(checked,s.checked||{});render();screenshotData.flysmart=(typeof s.flysmart==='string'&&s.flysmart.startsWith('data:image/'))?s.flysmart:'';screenshotData.crew=(typeof s.crew==='string'&&s.crew.startsWith('data:image/'))?s.crew:'';show('flysmart',screenshotData.flysmart);show('crew',screenshotData.crew);if(s.notes){let im=new Image();im.onload=()=>ctx.drawImage(im,0,0,c.clientWidth,180);im.src=s.notes}$('status').textContent='Saved checklist restored from this device.'}}catch(e){}
 })();
 </script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=10', {updateViaCache:'none'}).catch(err => console.error('Offline setup:', err));
+    navigator.serviceWorker.register('./sw.js?v=11', {updateViaCache:'none'}).catch(err => console.error('Offline setup:', err));
   });
 }
 </script></body></html>
