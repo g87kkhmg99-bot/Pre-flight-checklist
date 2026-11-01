@@ -176,7 +176,7 @@ try{let s=JSON.parse(localStorage.getItem(key)||'null');if(s){$('order').value=s
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=12', {updateViaCache:'none'}).catch(err => console.error('Offline setup:', err));
+    navigator.serviceWorker.register('./sw.js?v=14', {updateViaCache:'none'}).catch(err => console.error('Offline setup:', err));
   });
 }
 </script></body></html>

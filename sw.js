@@ -1,4 +1,4 @@
-const CACHE = 'preflight-checklist-v13';
+const CACHE = 'preflight-checklist-v14';
 const FILES = ['./', './index.html', './manifest.json', './icon.svg'];
 self.addEventListener('install', event => { event.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', event => { event.waitUntil((async()=>{const keys=await caches.keys();await Promise.all(keys.filter(k=>k.startsWith('preflight-checklist-')&&k!==CACHE).map(k=>caches.delete(k)));await self.clients.claim()})()); });
