@@ -34,10 +34,11 @@
 <p class="muted">Supplementary personal aid only. Always follow approved company checklists and aircraft procedures.</p>
 <script>
 (()=>{const $=id=>document.getElementById(id),key='preflightTaxiChecklistOfflineV1';
+const flysmartUpload=$('flysmart-upload');
 const pre=[['EDTO','edto'],['PINS','pins'],['APU','apu'],['APU BLD','apu_bld'],['EXT PWR','ext_pwr'],['ALTN BRK','altn_brk'],['CRS','crs'],['FUEL','fuel'],['HF','hf'],['NWS','nws'],['COCKPIT PREP CHECKLIST','cockpit_prep'],['L/S','loadsheet'],['CONFIRM PRE-DEPARTURE CHECKS COMPLETE','departure_complete']];
 const taxi=[['BRAKE CHK','brake_chk'],['CABIN READY','cabin_ready'],['CTL CHK','ctl_chk'],['BRAKE TEMP','brake_temp'],['TO BRIEF','to_brief'],['TAXI CL','taxi_cl'],['LINEUP CL','lineup_cl']],all=[...pre,...taxi],checked={};
 function progress(){let n=all.filter(x=>checked[x[1]]).length;$('count').textContent=n+' / 20 complete';$('bar').style.width=n/20*100+'%'}
-function render(){[['preflight',pre],['taxi',taxi]].forEach(([id,list])=>{let host=$(id);host.replaceChildren();list.forEach(([label,k])=>{let row=document.createElement('label');row.className='checkrow'+(checked[k]?' done':'');let cb=document.createElement('input');cb.type='checkbox';cb.checked=!!checked[k];cb.onchange=()=>{checked[k]=cb.checked;row.classList.toggle('done',cb.checked);progress()};let span=document.createElement('span');span.textContent=label;row.append(cb,span);host.append(row);if(k==='lineup_cl'){host.append($('flysmart-upload'))}})});progress()}render();
+function render(){[['preflight',pre],['taxi',taxi]].forEach(([id,list])=>{let host=$(id);host.replaceChildren();list.forEach(([label,k])=>{let row=document.createElement('label');row.className='checkrow'+(checked[k]?' done':'');let cb=document.createElement('input');cb.type='checkbox';cb.checked=!!checked[k];cb.onchange=()=>{checked[k]=cb.checked;row.classList.toggle('done',cb.checked);progress()};let span=document.createElement('span');span.textContent=label;row.append(cb,span);host.append(row);if(k==='lineup_cl'&&flysmartUpload){host.append(flysmartUpload)}})});progress()}render();
 let viewerScale=1,viewerNaturalW=0,viewerNaturalH=0;
 function closeViewer(){$('image-viewer').classList.remove('open')}
 function setViewerScale(scale){viewerScale=Math.max(.25,Math.min(4,scale));let im=$('viewer-image');im.style.width=(viewerNaturalW*viewerScale)+'px';im.style.height=(viewerNaturalH*viewerScale)+'px'}
